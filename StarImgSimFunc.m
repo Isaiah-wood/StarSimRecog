@@ -1,12 +1,12 @@
-function func = StarImgGenFunc
+function func = StarImgSimFunc
     %STARIMGGENFUNC
     func.GetStar = @GetStar;
-    func.StarLibParserSAO60SSS = @StarLibParserSAO60SSS;
+    func.StarLibInVision = @StarLibInVision;
     func.ExampleConf = @ExampleConf;
     func.ImgGen = @ImgGen;
 end
 
-function imgStarConf = GetStar(sbf, sensorConf, starLib, starLibParser, constMag)
+function imgStarConf = GetStar(sif, sensorConf, starLib, StarLibInVision, constMag)
     % sensorConf:       结构体，表示传感器参数. Parameters of sensor.
     %       --ra        传感器的赤经(弧度). Right ascension of sensor (radian).
     %       --dec       传感器的赤纬(弧度). Declination of sensor (radian).
@@ -24,127 +24,110 @@ function imgStarConf = GetStar(sbf, sensorConf, starLib, starLibParser, constMag
     %       注意: 焦距, 视场角半径, 像元尺寸和图像像素宽高之间存在制约关系, 知三求一.
     %       Note: there is a restrictive relationship between focal length, FoV radius, pixel size and image pixel width and height. Knowing the three can find the remaining one.
     % starLib:          Star library.
-    % starLibParser:    Function handle to the function used to parse star library file.
+    % StarLibInVision:    Function handle to the function used to parse star library file.
 
     ra = sensorConf.ra;
     dec = sensorConf.dec;
     roa = sensorConf.roa;
-    [starVecList, magnitudeList, starIdList, starSnList] = starLibParser(starLib, ra, dec, sensorConf.fovradius); % List of star direction vectors in celestial coordinate system.
+    [VisibleStarVecList, VisibleStarMagList, VisibleStarIdList, VisibleStarSnList] = StarLibInVision(starLib, ra, dec, sensorConf.fovradius, sensorConf.magmax); % List of star direction vectors in celestial coordinate system.
 
-    dcm = sbf.Att2Dcm([ra, dec, roa]);
-    sensorStarVecList = dcm * starVecList; % 方向矢量旋转至星敏坐标系
-    starCoordPixel = sbf.Vec2Coo(sensorConf, sensorStarVecList); % 投影变换
+    dcm = sif.Att2Dcm(deg2rad([ra, dec, roa]));
+    sensorVisibleStarVecList = dcm * VisibleStarVecList; % 方向矢量旋转至星敏坐标系
+    starCoordPixel = sif.Vec2Coo(sensorConf, sensorVisibleStarVecList); % 投影变换
 
     % 剔除不在矩形图像范围内的星. Cull stars that are not within the bounds of the rectangular image.
-    for starIdx = length(magnitudeList):-1:1
-        if starCoordPixel(1, starIdx) < 1 || starCoordPixel(1, starIdx) > sensorConf.height || starCoordPixel(2, starIdx) < 1 || starCoordPixel(2, starIdx) > sensorConf.width
-            starCoordPixel(:, starIdx) = [];
-            magnitudeList(starIdx) = [];
-            starIdList(starIdx) = [];
-            starSnList(starIdx) = [];
-        end
-    end
-    starNum = length(magnitudeList);
+    % for starIdx = length(VisibleStarVecList):-1:1
+    %     if starCoordPixel(1, starIdx) < 1 || starCoordPixel(1, starIdx) > sensorConf.height || starCoordPixel(2, starIdx) < 1 || starCoordPixel(2, starIdx) > sensorConf.width
+    %         starCoordPixel(:, starIdx) = [];
+    %         VisibleStarMagList(starIdx) = [];
+    %         VisibleStarIdList(starIdx) = [];
+    %         VisibleStarSnList(starIdx) = [];
+    %     end
+    % end
+    starNum = length(VisibleStarVecList);
 
-    % 实验用，调整星等
-    if nargin >= 5
-        magnitudeList(:) = constMag;
-    end
 
     % Cauculate star max brightness
-    maxList = sensorConf.constantc ./ 2.512 .^ magnitudeList;
+    maxList = sensorConf.constantc ./ 2.512 .^ VisibleStarMagList;
 
     % Construct imgStarConf
     typeCell = 101 + zeros(starNum, 1);
     % type: 201 - gaussian target
     %       202 - high dynamic target
     imgStarConf.type = typeCell;
-    imgStarConf.row = starCoordPixel(1, :)';
-    imgStarConf.col = starCoordPixel(2, :)';
+    imgStarConf.col = starCoordPixel(1, :)';
+    imgStarConf.row = starCoordPixel(2, :)';
     imgStarConf.max = maxList';
     imgStarConf.sigma = sensorConf.blursigma + zeros(starNum, 1);
-    imgStarConf.id = starIdList';
-    imgStarConf.sn = starSnList';
+    imgStarConf.id = VisibleStarIdList';
+    imgStarConf.sn = VisibleStarSnList';
 end
 
-function [starVecList, magnitudeList, starIdList, starSnList] = StarLibParserSAO60SSS(lib, sensorRa, sensorDec, fovRadius)
+function [VisibleStarVecList, VisibleStarMagList, VisibleStarIdList, VisibleStarSnList] = StarLibInVision(lib, sensorRa, sensorDec, fovRadius, magmax)
     % lib:          Star library.
     % sensorRa:     Right ascension of sensor.
     % sensorDec:    Declination of sensor.
     % fovRadius:    FoV radius of sensor.
 
-    % starVecList:      3xn matrix, list of direction vectors for possible stars in FoV, in celestial coordinate system.
-    % magnitudeList:    1xn matrix, list of magnitudes for possible stars in FoV.
-    % starIdList:       1xn matrix, list of identity for possible stars in FoV.
-    % starSnList:       1xn matrix, list of serial number for possible stars in FoV. Indicates the serial number of the star point in the star library file, count from zero.
+    % VisibleStarVecList:      3xn matrix, list of direction vectors for possible stars in FoV, in celestial coordinate system.
+    % VisibleStarMagList:    1xn matrix, list of magnitudes for possible stars in FoV.
+    % VisibleStarIdList:       1xn matrix, list of identity for possible stars in FoV.
+    % VisibleStarSnList:       1xn matrix, list of serial number for possible stars in FoV. Indicates the serial number of the star point in the star library file, count from zero.
+    
+    phi_Ocam = sensorRa;
+    theta_Ocam = 90 - sensorDec;
 
     libSize = size(lib, 1);
-    raMin = sensorRa - fovRadius / cos(sensorDec);
-    raMax = sensorRa + fovRadius / cos(sensorDec);
-    decMin = sensorDec - fovRadius;
-    decMax = sensorDec + fovRadius;
-
-    starVecList = zeros(3, 100);
-    magnitudeList = zeros(1, 100);
-    starIdList = zeros(1, 100);
-    starSnList = zeros(1, 100);
+    VisibleStarVecList = zeros(3, 100);
+    VisibleStarMagList = zeros(1, 100);
+    VisibleStarIdList = zeros(1, 100);
+    VisibleStarSnList = zeros(1, 100);
 
     starCnt = 0;
-    if raMin < 0
-        raMin = raMin + 2 * pi;
-        for i = 1:libSize
-            if (lib(i, 6) > raMin || lib(i, 6) < raMax) && lib(i, 7) > decMin && lib(i, 7) < decMax
-                starCnt = starCnt + 1;
-                starVecList(:, starCnt) = [lib(i, 2); lib(i, 3); lib(i, 4)];
-                magnitudeList(starCnt) = lib(i, 5);
-                starIdList(starCnt) = lib(i, 1);
-                starSnList(starCnt) = i - 1;
-            end
-        end
-    elseif raMax > 2 * pi
-        raMax = raMax - 2 * pi;
-        for i = 1:libSize
-            if (lib(i, 6) > raMin || lib(i, 6) < raMax) && lib(i, 7) > decMin && lib(i, 7) < decMax
-                starCnt = starCnt + 1;
-                starVecList(:, starCnt) = [lib(i, 2); lib(i, 3); lib(i, 4)];
-                magnitudeList(starCnt) = lib(i, 5);
-                starIdList(starCnt) = lib(i, 1);
-                starSnList(starCnt) = i - 1;
-            end
-        end
-    else
-        for i = 1:libSize
-            if lib(i, 6) > raMin && lib(i, 6) < raMax && lib(i, 7) > decMin && lib(i, 7) < decMax
-                starCnt = starCnt + 1;
-                starVecList(:, starCnt) = [lib(i, 2); lib(i, 3); lib(i, 4)];
-                magnitudeList(starCnt) = lib(i, 5);
-                starIdList(starCnt) = lib(i, 1);
-                starSnList(starCnt) = i - 1;
-            end
+    % 根据编号遍历数据  
+    for i = 1:libSize
+        phi_P = lib(i,6);
+        theta_P = 90 - lib(i,7);
+        if lib(i,5) < magmax && ...
+        sind(theta_Ocam)*sind(theta_P)*cosd(phi_Ocam-phi_P) + ...
+        cosd(theta_Ocam)*cosd(theta_P) > cosd(fovRadius)
+        % 球面三角中的余弦定理：cos a = cos b * cos c + sin b sin c cos A
+            starCnt = starCnt + 1;
+            VisibleStarVecList(:, starCnt) = [lib(i, 2); lib(i, 3); lib(i, 4)];
+            VisibleStarMagList(starCnt) = lib(i, 5);
+            VisibleStarIdList(starCnt) = lib(i, 1);
+            VisibleStarSnList(starCnt) = i - 1;
         end
     end
-    starVecList(:, starCnt + 1:end) = [];
-    magnitudeList(:, starCnt + 1:end) = [];
-    starIdList(:, starCnt + 1:end) = [];
-    starSnList(:, starCnt + 1:end) = [];
+
+    VisibleStarVecList(:, starCnt + 1:end) = [];
+    VisibleStarMagList(:, starCnt + 1:end) = [];
+    VisibleStarIdList(:, starCnt + 1:end) = [];
+    VisibleStarSnList(:, starCnt + 1:end) = [];
 end
 
 function [sensorConf, imgStarConf, imgBackgdConf, noiseConf] = ExampleConf
     sensorConf = struct( ...
-        'ra', 1.34954201, ...
-        'dec', -0.21011321, ...
-        'roa', 0.23360359, ...
-        'f', (1024 ^ 2 + 1024 ^ 2) ^ 0.5/2 * 20/1000 / tan(10/180 * pi), ...
-        'fovradius', 10/180 * pi, ...
-        'pixelsize', 20, ...
-        'blursigma', 1, ...
-        'constantc', 6000, ...
-        'height', 1024, ...
-        'width', 1024, ...
-        'mainprow', 0.5 * (1024 + 1), ...
-        'mainpcol', 0.5 * (1024 + 1), ...
+        'ra', 0, ...
+        'dec', 0, ...
+        'roa', 0, ...
+        'height', 4096, ...
+        'width', 4096, ...
+        'pixelsize', 2.74, ...
+        'fovradius', 6, ...
+        'magmax', 7.5, ...
+        'maglimit', 8, ...
+        'blursigma', 4, ...
+        'constantc', 600000, ...
         'channels', 1 ...
     );
+    sensorConf.ra = rand() * 2*pi;
+    sensorConf.dec = rand() * pi;
+    sensorConf.roa = rand() * 2*pi;
+    sensorConf.f = (sensorConf.height^2 + sensorConf.width^2)^0.5/2 * sensorConf.pixelsize / tand(sensorConf.fovradius);
+    sensorConf.mainpcol = 0.5 * (sensorConf.height + 1);
+    sensorConf.mainprow = 0.5 * (sensorConf.width + 1);
+
     imgStarConf = struct( ...
         'type', [101; 101; 101; 101; 101; 101], ...
         'row', [354.4; 213.3; 10; 466.32; 135.6; 396.2], ...
