@@ -11,4 +11,7 @@ isf = StarImgSimFunc();
 % 通过改sensorConf、imgBackgdConf、noiseConf中的值来修改星图模拟参数
 imgPointConf = isf.GetStar(sif, sensorConf, sif.StarLib, isf.StarLibInVision);
 starImg = isf.ImgGen(sensorConf, imgPointConf, imgBackgdConf, noiseConf);
-imshow(starImg);
+% imshow(starImg);
+
+isf.SaveImg(sensorConf,starImg);
+

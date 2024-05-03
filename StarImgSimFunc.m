@@ -4,6 +4,7 @@ function func = StarImgSimFunc
     func.StarLibInVision = @StarLibInVision;
     func.ExampleConf = @ExampleConf;
     func.ImgGen = @ImgGen;
+    func.SaveImg = @SaveImg;
 end
 
 function imgStarConf = GetStar(sif, sensorConf, starLib, StarLibInVision, constMag)
@@ -138,7 +139,7 @@ function [sensorConf, imgStarConf, imgBackgdConf, noiseConf] = ExampleConf
         'sn', [0; 0; 0; 0; 0; 0] ...
     );
     imgBackgdConf = struct( ...
-        'value', 30 ...
+        'value', 0 ...
     );
     noiseConf = struct( ...
         'gauss', struct('enable', 1, 'mu', 0, 'sigma', 3) ...
@@ -238,6 +239,106 @@ function [starImg, nbPixList] = ImgGen(sensorConf, imgStarConf, imgBackgdConf, n
         end
     end
 
+    % for wakestarIdx = 1:7
+    %     starMax = 600000 ./ 2.512 .^ (2*rand()+7);
+    %     starSigma = 4;
+    %     starCol = round(4096*rand());
+    %     starRow = round(4096*rand());
+    %     % 确定星点窗口边界
+    %     boxRadius = 20;
+    %     radius = 20;
+    %     thickness = 2; % 方框粗细 
+    % 
+    %         % 确保星点坐标在图像范围内  
+    %         starCol = max(1, min(starCol, sensorConf.width));  
+    %         starRow = max(1, min(starRow, sensorConf.height));  
+    % 
+    %         % 计算方框边界  
+    %         x1 = max(1, starCol - radius - thickness/2);  
+    %         y1 = max(1, starRow - radius - thickness/2);  
+    %         x2 = min(sensorConf.width, starCol + radius + thickness/2);  
+    %         y2 = min(sensorConf.height, starRow + radius + thickness/2);  
+    % 
+    %         % 绘制方框  
+    %         for row = y1:y2  
+    %             for col = x1:x2  
+    %                 % 计算当前点到星点的距离  
+    %                 d = sqrt((col - starCol).^2 + (row - starRow).^2);  
+    % 
+    %                 % 判断点是否在内框或外框上  
+    %                 if (d >= radius - thickness/2) && (d <= radius + thickness/2)  
+    %                     % 设置方框颜色为白色（或所需颜色）  
+    %                     starImg(row, col) = starImg(row, col) + 255; % 假设图像是uint8类型  
+    %                 end  
+    %             end  
+    %         end  
+    % 
+    % 
+    %     % 加星点
+    %     le = max(1, floor(starCol - boxRadius));
+    %     ri = min(sensorConf.width, ceil(starCol + boxRadius));
+    %     to = max(1, floor(starRow - boxRadius));
+    %     bo = min(sensorConf.height, ceil(starRow + boxRadius));
+    %     for row = to:bo
+    %         for col = le:ri
+    %             dRow = row - starRow;
+    %             dCol = col - starCol;
+    %             starIntensity = starMax * exp(- (dCol ^ 2 + dRow ^ 2) * 0.5 / starSigma ^ 2);
+    %             starImg(row, col) = starImg(row, col) + starIntensity;
+    %         end
+    %     end
+    % end
+    % 
+    % for fakestarIdx = 1:7
+    %     starMax = 600000 ./ 2.512 .^ (2*rand()+5);
+    %     starSigma = 4;
+    %     starCol = round(4096*rand());
+    %     starRow = round(4096*rand());
+    %     % 确定星点窗口边界
+    %     boxRadius = 20;
+    %     radius = 48;
+    %     thickness = 2; % 方框粗细 
+    % 
+    %         % 确保星点坐标在图像范围内  
+    %         starCol = max(1, min(starCol, sensorConf.width));  
+    %         starRow = max(1, min(starRow, sensorConf.height));  
+    % 
+    %         % 计算方框边界  
+    %         x1 = max(1, starCol - radius - thickness/2);  
+    %         y1 = max(1, starRow - radius - thickness/2);  
+    %         x2 = min(sensorConf.width, starCol + radius + thickness/2);  
+    %         y2 = min(sensorConf.height, starRow + radius + thickness/2);  
+    % 
+    %         % 绘制方框  
+    %         for row = y1:y2  
+    %             for col = x1:x2  
+    %                 % 计算当前点到星点的距离  
+    %                 d = sqrt((col - starCol).^2 + (row - starRow).^2);  
+    % 
+    %                 % 判断点是否在内框或外框上  
+    %                 if (d >= radius - thickness/2) && (d <= radius + thickness/2)  
+    %                     % 设置方框颜色为白色（或所需颜色）  
+    %                     starImg(row, col) = starImg(row, col) + 255; % 假设图像是uint8类型  
+    %                 end  
+    %             end  
+    %         end  
+    % 
+    % 
+    %     % 加星点
+    %     le = max(1, floor(starCol - boxRadius));
+    %     ri = min(sensorConf.width, ceil(starCol + boxRadius));
+    %     to = max(1, floor(starRow - boxRadius));
+    %     bo = min(sensorConf.height, ceil(starRow + boxRadius));
+    %     for row = to:bo
+    %         for col = le:ri
+    %             dRow = row - starRow;
+    %             dCol = col - starCol;
+    %             starIntensity = starMax * exp(- (dCol ^ 2 + dRow ^ 2) * 0.5 / starSigma ^ 2);
+    %             starImg(row, col) = starImg(row, col) + starIntensity;
+    %         end
+    %     end
+    % end
+
     %   加高斯噪声
     if noiseConf.gauss.enable
         starImg = starImg + normrnd(noiseConf.gauss.mu, noiseConf.gauss.sigma, sensorConf.height, sensorConf.width);
@@ -251,4 +352,16 @@ function [starImg, nbPixList] = ImgGen(sensorConf, imgStarConf, imgBackgdConf, n
     starImg = round(starImg);
     starImg = max(min(starImg, 255), 0);
     starImg = uint8(starImg);
+end
+
+
+function SaveImg(sensorConf,starImg)
+    ra = sensorConf.ra;
+    dec = sensorConf.dec;
+    roa = sensorConf.roa;
+
+    toolboxPath = strrep(fileparts(mfilename('fullpath')), '\', '/');
+    dirPath = ['ra',num2str(ra),'_dec',num2str(dec),'_roa',num2str(roa),'.png'];
+    ImgPath = [toolboxPath,'/Img/',dirPath];
+    imwrite(starImg,ImgPath)
 end
