@@ -1,0 +1,2 @@
+StarLib/angle_database.csv filter=lfs diff=lfs merge=lfs -text
+StarLib/angle_database_unsorted.csv filter=lfs diff=lfs merge=lfs -text
