@@ -3,7 +3,7 @@ clear
 
 
 StarLib = readmatrix('StarLib/hip_table.csv');
-Fnsis = Func_StarImgSim();
+Fnsis = FuncStarImgSim();
 
 [cameraConf, noiseConf] = Fnsis.InitConf();
 VisibleStarList = Fnsis.StarLibInVision(StarLib, cameraConf);
@@ -13,5 +13,5 @@ starImg         = Fnsis.PrintPhoto(cameraConf, imgPointConf, noiseConf);
 imshow(starImg);
 % Fnsis.SaveImgWithDir(cameraConf,starImg);
 
-VisibleStarListSorted = sortrows(VisibleStarList,5);
-writematrix(VisibleStarListSorted,'VisibleStarListSorted.csv')
+% VisibleStarListSorted = sortrows(VisibleStarList,5);
+% writematrix(VisibleStarListSorted,'VisibleStarListSorted.csv')
