@@ -1,13 +1,37 @@
-WorkspacePath      = strrep(fileparts(mfilename('fullpath')), '\', '/');
-HIPdatPath         = [WorkspacePath, '/StarLib/hip_table.dat'];
-HIPcsvPath         = [WorkspacePath, '/StarLib/hip_table.csv'];
-AngLibPath         = [WorkspacePath, '/StarLib/angle_database.csv'];
-AngLibUnsortedPath = [WorkspacePath, '/StarLib/angle_database_unsorted.csv'];
+%% 脚本————数据预处理
+% 从HIP星库文件hip_table.dat中读取数据；
+% 生成坐标子表，Vec表示三维向量坐标，Sph表示赤经赤纬
+% 生成星等子表，从8/7.5星等处截取子表
+
+
+
+
+WorkspacePath = strrep(fileparts(mfilename('fullpath')), '\', '/');
+HIPdatPath    = [WorkspacePath, '/StarLib/hip_table.dat'];
+HIPcsvPath    = [WorkspacePath, '/StarLib/hip_table.csv'];
+VecLibPath    = [WorkspacePath, '/StarLib/starlib_vec.csv'];
+SphLibPath    = [WorkspacePath, '/StarLib/starlib_sph.csv'];
+SubLib_Mag8   = [WorkspacePath, '/StarLib/sublib_mag8.csv'];
+SubLib_Mag7_5 = [WorkspacePath, '/StarLib/sublib_mag7_5.csv'];
+
+
+StarsLib    = dat2csv(HIPdatPath, HIPcsvPath);
+StarsVecLib = StarsLib(:, 1:5);
+StarsSphLib = [StarsLib(:, 1), StarsLib(:, 6:7), StarsLib(:, 5)];
+writematrix(StarsVecLib, VecLibPath);
+writematrix(StarsSphLib, SphLibPath);
+
+SubStarsLib_Mag8   = StarsLib(StarsLib(:, 5) <= 8, :);
+SubStarsLib_Mag7_5 = StarsLib(StarsLib(:, 5) <= 7.5, :);
+writematrix(SubStarsLib_Mag8, SubLib_Mag8);
+writematrix(SubStarsLib_Mag7_5, SubLib_Mag7_5);
 
 
 
 
 
+
+%% 函数 dat2csv
 function StarsLib = dat2csv(datPath, csvPath)
 
     starsTable = readtable(datPath,"NumHeaderLines",9,"VariableNamingRule","preserve");
