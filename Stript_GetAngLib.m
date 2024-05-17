@@ -1,58 +1,73 @@
 close all
 clear
+format longG
 
-WorkspacePath      = strrep(fileparts(mfilename('fullpath')), '\', '/');
-HIPdatPath         = [WorkspacePath, '/StarLib/hip_table.dat'];
-HIPcsvPath         = [WorkspacePath, '/StarLib/hip_table.csv'];
-AngLibPath         = [WorkspacePath, '/StarLib/angle_database.csv'];
-AngLibUnsortedPath = [WorkspacePath, '/StarLib/angle_database_unsorted.csv'];
+fovRadius = 6;
 
-StarLib = readmatrix(HIPcsvPath);
-
-
-cameraConf.maglimit = 7.5;
-cameraConf.fovradius = 6;
-
-
-AngLib = GetAngLib(AngLibPath, AngLibUnsortedPath, StarLib, cameraConf);
+WorkspacePath    = strrep(fileparts(mfilename('fullpath')), '\', '/');
+HIPdatPath       = [WorkspacePath, '/StarLib/hip_table.dat'];
+HIPcsvPath       = [WorkspacePath, '/StarLib/hip_table.csv'];
+AngLib_Mag8_Path       = [WorkspacePath, '/StarLib/AngLib_mag8.csv'];
+AngLib_Mag8_SortedPath = [WorkspacePath, '/StarLib/AngLib_mag8_sorted.csv'];
+AngLib_Mag7_5_Path       = [WorkspacePath, '/StarLib/AngLib_mag7_5.csv'];
+AngLib_Mag7_5_SortedPath = [WorkspacePath, '/StarLib/AngLib_mag7_5sorted.csv'];
 
 
+if isempty(dir(HIPcsvPath))
+    StarsLib = dat2csv(HIPdatPath, HIPcsvPath);
+else
+    StarsLib = readmatrix(HIPcsvPath);
+end
 
-function AngLib = GetAngLib(AngLibPath, AngLibUnsortedPath, StarLib, cameraConf)
+
+SubStarsLib_Mag7_5 = StarsLib(StarsLib(:, 5) <= 7.5, 1:4);
+clear StarsLib;
+AngLib_Mag7_5 = GetAngLib(AngLib_Mag7_5_Path, AngLib_Mag7_5_SortedPath, SubStarsLib_Mag7_5, fovRadius);
+
+
+
+% SubStarsLib_Mag8   = StarsLib(StarsLib(:, 5) <= 8, 1:4);
+% clear StarsLib;
+% AngLib_Mag8 = GetAngLib(AngLib_Mag8_Path, AngLib_Mag8_SortedPath, SubStarsLib_Mag8, fovRadius);
+
+
+
+
+
+
+
+
+function AngLib = GetAngLib(AngLibPath, AngLibSortedPath, StarLib, fovRadius)
+    disp(size(StarLib, 1))
+    StarLibNum = size(StarLib, 1);
     StarIdList = StarLib(:, 1);
     StarVecList = StarLib(:, 2:4);
-    StarMagList = StarLib(:, 5);
-    StarLibMagMask = StarMagList <= cameraConf.maglimit;
-    StarVecsubList = StarVecList(StarLibMagMask, :);
-    StarIdsubList = StarIdList(StarLibMagMask, :);
 
-    disp(size(StarVecsubList, 1))
-    % writematrix(StarVecsubList, AngLibPath);
     LibIndex = 1;
+    AngDistThreshold = cosd(fovRadius * 2);
     StarAngLib = zeros(10, 1);
-    for i = 1:size(StarVecsubList, 1)
-        Vec1 = StarVecsubList(i, :);
-        for j = i+1:size(StarVecsubList, 1)
-            Vec2 = StarVecsubList(j, :);
-            AngDist = acosd(dot(Vec1, Vec2));
-            if AngDist < cameraConf.fovradius * 2
-            % if AngDist < cameraConf.fovradius / 3
+    for i = 1:StarLibNum
+        Vec1 = StarVecList(i, :);
+        for j = i+1:StarLibNum
+            Vec2 = StarVecList(j, :);
+            AngDist = dot(Vec1, Vec2);
+            if AngDist < AngDistThreshold
                 StarAngLib(LibIndex, 1) = AngDist;
-                StarAngLib(LibIndex, 2) = StarIdsubList(i, :);
-                StarAngLib(LibIndex, 3) = StarIdsubList(j, :);
+                StarAngLib(LibIndex, 2) = StarIdList(i, :);
+                StarAngLib(LibIndex, 3) = StarIdList(j, :);
                 LibIndex = LibIndex + 1;
             end
         end
         disp(i)
-        if mod(i, 1000) == 0 || i == size(StarVecsubList, 1)
-            StarAngLib(LibIndex+1:end, :) = [];
-            writematrix(StarAngLib, sprintf('StarLib/StarAngLib_%.5d.csv', i));
-            LibIndex = 1;
-            StarAngLib = zeros(100, 1);
-        end
+        % if mod(i, 1000) == 0 || i == size(StarVecList, 1)
+        %     StarAngLib(LibIndex+1:end, :) = [];
+        %     writematrix(StarAngLib, sprintf('StarLib/StarAngLib_%.5d.csv', i));
+        %     LibIndex = 1;
+        %     StarAngLib = zeros(100, 1);
+        % end
     end
     StarAngLib(LibIndex+1:end, :) = [];
-    writematrix(StarAngLib, AngLibUnsortedPath);
+    writematrix(StarAngLib, AngLibSortedPath);
 
     AngLib = sortrows(StarAngLib, 1, "ascend");
     writematrix(AngLib, AngLibPath);

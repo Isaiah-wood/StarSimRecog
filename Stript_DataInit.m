@@ -11,8 +11,9 @@ HIPdatPath    = [WorkspacePath, '/StarLib/hip_table.dat'];
 HIPcsvPath    = [WorkspacePath, '/StarLib/hip_table.csv'];
 VecLibPath    = [WorkspacePath, '/StarLib/starlib_vec.csv'];
 SphLibPath    = [WorkspacePath, '/StarLib/starlib_sph.csv'];
-SubLib_Mag8   = [WorkspacePath, '/StarLib/sublib_mag8.csv'];
-SubLib_Mag7_5 = [WorkspacePath, '/StarLib/sublib_mag7_5.csv'];
+
+SubLib_Mag8_Path   = [WorkspacePath, '/StarLib/sublib_mag8.csv'];
+SubLib_Mag7_5_Path = [WorkspacePath, '/StarLib/sublib_mag7_5.csv'];
 
 
 StarsLib    = dat2csv(HIPdatPath, HIPcsvPath);
@@ -23,8 +24,8 @@ writematrix(StarsSphLib, SphLibPath);
 
 SubStarsLib_Mag8   = StarsLib(StarsLib(:, 5) <= 8, :);
 SubStarsLib_Mag7_5 = StarsLib(StarsLib(:, 5) <= 7.5, :);
-writematrix(SubStarsLib_Mag8, SubLib_Mag8);
-writematrix(SubStarsLib_Mag7_5, SubLib_Mag7_5);
+writematrix(SubStarsLib_Mag8, SubLib_Mag8_Path);
+writematrix(SubStarsLib_Mag7_5, SubLib_Mag7_5_Path);
 
 
 
