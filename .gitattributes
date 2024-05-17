@@ -1,8 +1,9 @@
-StarLib/angle_database.csv filter=lfs diff=lfs merge=lfs -text
-StarLib/angle_database_unsorted.csv filter=lfs diff=lfs merge=lfs -text
+StarLib/**.csv filter=lfs diff=lfs merge=lfs -text
+# StarLib/angle_database.csv filter=lfs diff=lfs merge=lfs -text
+# StarLib/angle_database_unsorted.csv filter=lfs diff=lfs merge=lfs -text
 
-StarLib/AngLib_mag8.csv filter=lfs diff=lfs merge=lfs -text
-StarLib/AngLib_mag8_sorted.csv filter=lfs diff=lfs merge=lfs -text
+# StarLib/AngLib_mag8.csv filter=lfs diff=lfs merge=lfs -text
+# StarLib/AngLib_mag8_sorted.csv filter=lfs diff=lfs merge=lfs -text
 
-StarLib/AngLib_mag7_5.csv filter=lfs diff=lfs merge=lfs -text
-StarLib/AngLib_mag7_5_sorted.csv filter=lfs diff=lfs merge=lfs -text
+# StarLib/AngLib_mag7_5.csv filter=lfs diff=lfs merge=lfs -text
+# StarLib/AngLib_mag7_5_sorted.csv filter=lfs diff=lfs merge=lfs -text
