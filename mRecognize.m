@@ -10,7 +10,7 @@ Fnsm = FuncStarMatch();
 
 [cameraConf, noiseConf] = Fnsis.InitConf();
 %% 读取图像
-starImg = Fnsr.ReadStarImg(Fnsr.ImgDirPath,'ra3.8491_dec2.1456_roa4.808.png');
+starImg = Fnsr.ReadStarImg(Fnsr.ImgDirPath,'ra112.5788_dec29.0673_roa64.3558.png');
 
 %% 星图识别
 binImg = Fnsr.Binarization(starImg, 'TimesSigma', 3);

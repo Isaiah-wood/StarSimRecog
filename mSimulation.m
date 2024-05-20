@@ -7,11 +7,13 @@ Fnsis = FuncStarImgSim();
 
 [cameraConf, noiseConf] = Fnsis.InitConf();
 VisibleStarList = Fnsis.StarLibInVision(StarLib, cameraConf);
-imgPointConf    = Fnsis.TakePhoto(cameraConf, VisibleStarList);
-starImg         = Fnsis.PrintPhoto(cameraConf, imgPointConf, noiseConf);
+[imgPointConf, VisibleStarListSorted] = Fnsis.TakePhoto(cameraConf, VisibleStarList);
+starImg = Fnsis.PrintPhoto(cameraConf, imgPointConf, noiseConf);
 
-imshow(starImg);
-% Fnsis.SaveImgWithDir(cameraConf,starImg);
+% imshow(starImg);
+Fnsis.SaveImgWithDir(cameraConf, starImg, VisibleStarListSorted);
 
-% VisibleStarListSorted = sortrows(VisibleStarList,5);
-% writematrix(VisibleStarListSorted,'VisibleStarListSorted.csv')
+
+
+
+
