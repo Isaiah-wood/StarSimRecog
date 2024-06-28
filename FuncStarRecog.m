@@ -8,224 +8,314 @@ function func = FuncStarRecog
     func.MarkPosition = @MarkPosition;
 end
 
-function [starImg, PriorAtt] = ReadStarImg(ImgDirPath, ImgName)
+function [starImg, priorAtt, starList] = ReadStarImg(ImgDirPath, FileName)
     % 读取指定目录下的星图图像，并提取图像名称中的先验姿态信息
     % ImgDirPath: 图像目录路径
-    % ImgName: (可选) 图像文件名，如果提供则直接使用，否则随机选择
+    % FileName: (可选) 图像文件名，如果提供则直接使用，否则随机选择
     
     ImgFiles = dir([ImgDirPath, '*.png']);
+    CsvFiles = dir([ImgDirPath, '*.csv']);
     
     % 检查是否存在PNG图像
     if isempty(ImgFiles)
         error('No PNG images found in the directory.');
     end
-
-    % 如果未提供ImgName，随机选择一个图像
-    if nargin < 2 || isempty(ImgName)
-        fileIdx = randi(length(ImgFiles));
-        fileName = ImgFiles(fileIdx).name;
-    else
-        fileName = ImgName; % 使用用户指定的图像文件名
+    if isempty(CsvFiles)
+        error('No CSV images found in the directory.');
     end
 
-    StarImgPath = [ImgDirPath, fileName];
+    % 如果未提供FileName，随机选择一个图像
+    if nargin < 2 || isempty(FileName)
+        imgFileIdx = randi(length(ImgFiles));
+        StarImgName = ImgFiles(imgFileIdx).name;
+        csvFileIdx = randi(length(CsvFiles));
+        StarCsvName = CsvFiles(csvFileIdx).name;
+    else
+        StarImgName = [FileName,'.png'];
+        StarCsvName = [FileName,'.csv'];
+    end
+
+    StarImgPath = [ImgDirPath, StarImgName];
+    StarCsvPath = [ImgDirPath, StarCsvName];
 
     % 提取图像名称中的先验姿态信息
     [~, name, ~] = fileparts(StarImgPath);
     pattern = '\d+(\.\d+)?';
     matches = regexp(name, pattern, 'match');
-    PriorAtt = cellfun(@str2double, matches);
+    priorAtt = cellfun(@str2double, matches);
 
     % 读取图像
     starImg = imread(StarImgPath);
+    starList = readmatrix(StarCsvPath);
+    starList = starList(starList(:,6)==1,:);
 
     % 显示结果（可选，根据需要保留或删除）
-    disp(PriorAtt)
+    disp(['读取星图的先验姿态:', num2str(priorAtt)])
     % imshow(starImg)
 end
 
 function binaryImg = Binarization(srcImg, mode, arg1)
-    % mode:
-    % (default: MeanBased)
-    % 'MeanBased' : arg1(default: 10) plus mean will be used as threshold of binarization.
-    % 'FixedThres': arg1(default: 128) declares a fixed threshold of binarization.
-    % 'TimesSigma': arg1(default: 3) declares that how many times sigma will be used as threshold.
-    % 'RegionMeanBased' : binarization in a square region whose radius is arg2, arg1(default: 10) plus mean will be used as threshold of binarization.
+    % 添加函数的文档字符串，说明函数的功能、输入输出参数等
+    % binaryImg = Binarization(srcImg, mode, arg1) performs image binarization based on different modes.
+    % @param srcImg Input image.
+    % @param mode Binarization mode (default: 'MeanBased').
+    % @param arg1 Argument depending on the mode.
+    % @return binaryImg Binarized image.
+    
+    % 检查输入参数的有效性
+    if ~isnumeric(srcImg) || isempty(srcImg)
+        error('srcImg must be a numeric matrix.');
+    end
+    
     if nargin < 2
         mode = 'MeanBased';
     end
-    if nargin < 3
-        switch lower(mode)
-            case 'fixedthres'
-                arg1 = 128;
-            case 'timessigma'
-                arg1 = 3;
-            case 'meanbased'
-                arg1 = 10;
-            case 'regionmeanbased'
-                arg1 = 10;
-            otherwise
-                error(['There is no mode called ', mode, '.']);
-                mode = 'MeanBased';
-                arg1 = 10;
-        end
+    
+    % 设置默认的arg1值和检查mode的有效性合并进行
+    defaultArg1 = struct('MeanBased', 10, 'FixedThres', 128, 'TimesSigma', 3);
+    switch lower(mode)
+        case {'meanbased', 'fixedthres', 'timessigma'}
+            if nargin < 3
+                arg1 = defaultArg1.(mode);
+            end
+        otherwise
+            error(['There is no mode called ', mode, '.']);
     end
-
+    
+    % 根据不同的mode计算阈值
     switch lower(mode)
         case 'fixedthres'
             thres = arg1;
         case 'timessigma'
-            imgMean = mean(mean(srcImg));
+            times = arg1;
+            imgMean = mean2(srcImg);
             imgStd = std2(srcImg);
-            thres = imgMean + arg1 * imgStd;
+            thres = imgMean + times * imgStd;
+            disp(['thres:',num2str([imgMean, imgStd, thres])])
         case 'meanbased'
-            imgMean = mean(mean(srcImg));
-            thres = imgMean + arg1;
-        case 'regionmeanbased'
-            arg1 = 10;
+            offset = arg1;
+            imgMean = mean2(srcImg);
+            thres = imgMean + offset;
         otherwise
-            error(['There is no mode called ', mode, '.']);
-            imgMean = mean(mean(srcImg));
-            thres = imgMean + arg1;
+            error('Unknow mode.');
     end
+    
+    % 应用阈值生成二值图像
     binaryImg = srcImg > thres;
 end
 
-function starList = CenterExtraction(srcImg, binaryImg, method, bgdThres, sizeThres)
-    % method:
-    % 'centroid'    质心法
-    % 'sqweighted'  平方加权质心法
-    % 'withthres'   带阈值的质心法，缺省时默认方法
-    % 'fitting'     曲面拟合法，暂未实现
-
-    % bgdThres:     当使用带阈值的质心法时，减去的背景值T，缺省时默认为输入图像的均值
-    % sizeThres:    连通域的像素数量阈值, 尺寸小于此值的连通域将被剔除
-
-    % starList:
-    %   row:    1*n matrix
-    %   col:    1*n matrix
-    %   size:   1*n matrix
-    %   bri:    1*n matrix
-
-    imgMean = mean2(srcImg);
+function ObservedStarList = CenterExtraction(srcImg, binaryImg, method, bgdThres, sizeThres)
     if nargin < 3 || isempty(method)
         method = 'withthres';
     end
     if strcmp(method, 'withthres') && (nargin < 4 || isempty(bgdThres))
-        bgdThres = imgMean;
+        bgdThres = mean2(srcImg);
     end
     if nargin < 5 || isempty(sizeThres)
         sizeThres = 1;
     end
 
-    % 寻找所有连通区域
+    % 计算图像均值（可能用于后续处理）
+    imgMean = mean2(srcImg);
+    
+    % 使用bwconncomp寻找所有连通区域
     connRegionStrc = bwconncomp(binaryImg, 4);
     connRegionList = connRegionStrc.PixelIdxList;
-    % 尺寸阈值
+    
+    % 应用尺寸阈值
     if sizeThres > 1
-        starNum = 0;
-        for starIdx = 1:length(connRegionList)
-            if length(connRegionList{starIdx}) >= sizeThres
-                starNum = starNum + 1;
-                connRegionList{starNum} = connRegionList{starIdx};
-            end
-        end
-        connRegionList(starNum + 1:end) = [];
+        connRegionList = connRegionList(cellfun(@numel, connRegionList) >= sizeThres);
     end
+    
+    % 获取图像大小
+    [rows,cols] = size(srcImg);
+    srcImg = im2double(srcImg);
+    % 初始化输出变量
     starNum = length(connRegionList);
-    % 宽高
-    imgSize = size(srcImg);
-    rows = imgSize(1);
-    cols = imgSize(2);
-    % 计算每个连通区域的重心
-    % s = regionprops(cc, 'Centroid');
-    % centroids = cat(1, s.Centroid);
-    starSizeList = zeros(1, starNum);
-    starCenRowList = zeros(1, starNum);
-    starCenColList = zeros(1, starNum);
-    starBrightnessList = zeros(1, starNum);
-    if strcmp(method, 'centroid')
-        for starIdx = 1:starNum
-            % 对每一簇像素
-            pixelList = connRegionList{starIdx};
-            intensitySum = 0;
-            cenRowSum = 0;
-            cenColSum = 0;
-            for pixelIdx = 1:length(pixelList)
-                col = uint32(ceil(pixelList(pixelIdx) / rows));
-                row = uint32(pixelList(pixelIdx) - (col - 1) * rows);
-                intensitySum = intensitySum + double(srcImg(row, col));
-                cenRowSum = cenRowSum + double(srcImg(row, col)) * double(row);
-                cenColSum = cenColSum + double(srcImg(row, col)) * double(col);
-            end
-            cenRow = cenRowSum / intensitySum;
-            cenCol = cenColSum / intensitySum;
-            starCenRowList(starIdx) = cenRow;
-            starCenColList(starIdx) = cenCol;
-        end
-    elseif strcmp(method, 'sqweighted')
-        for starIdx = 1:starNum
-            % 对每一簇像素
-            pixelList = connRegionList{starIdx};
-            intensitySum = 0;
-            cenRowSum = 0;
-            cenColSum = 0;
-            for pixelIdx = 1:length(pixelList)
-                col = uint32(ceil(pixelList(pixelIdx) / rows));
-                row = uint32(pixelList(pixelIdx) - (col - 1) * rows);
-                intensitySum = intensitySum + double(srcImg(row, col)) ^ 2;
-                cenRowSum = cenRowSum + double(srcImg(row, col)) ^ 2 * double(row);
-                cenColSum = cenColSum + double(srcImg(row, col)) ^ 2 * double(col);
-            end
-            cenRow = cenRowSum / intensitySum;
-            cenCol = cenColSum / intensitySum;
-            starCenRowList(starIdx) = cenRow;
-            starCenColList(starIdx) = cenCol;
-        end
-    elseif strcmp(method, 'withthres')
-        for starIdx = 1:starNum
-            % 对每一簇像素
-            pixelList = connRegionList{starIdx};
-            intensitySum = 0;
-            cenRowSum = 0;
-            cenColSum = 0;
-            for pixelIdx = 1:length(pixelList)
-                col = uint32(ceil(pixelList(pixelIdx) / rows));
-                row = uint32(pixelList(pixelIdx) - (col - 1) * rows);
-                intensitySum = intensitySum + (double(srcImg(row, col)) - bgdThres);
-                cenRowSum = cenRowSum + (double(srcImg(row, col)) - bgdThres) * double(row);
-                cenColSum = cenColSum + (double(srcImg(row, col)) - bgdThres) * double(col);
-            end
-            cenRow = cenRowSum / intensitySum;
-            cenCol = cenColSum / intensitySum;
-            starCenRowList(starIdx) = cenRow;
-            starCenColList(starIdx) = cenCol;
-        end
-    elseif strcmp(method, 'fitting')
+    ObservedStarList = zeros(starNum, 4);
 
-    else
-        ['Error: There are not a method called "', method, '".']
-    end
-
-    % 计算每颗星的大小及亮度（最亮四个像素的均值）
     for starIdx = 1:starNum
-        % 对每一簇像素
         pixelList = connRegionList{starIdx};
-        starSize = length(pixelList);
-        starSizeList(starIdx) = starSize;
-        if starSize >= 4
-            sortedPix = sort(srcImg(pixelList), 'descend');
-        else
-            col = uint32(round(starCenColList(starIdx)));
-            row = uint32(round(starCenRowList(starIdx)));
-            win = srcImg(max(1, row - 1):min(rows, row + 1), max(1, col - 1):min(cols, col + 1));
-            sortedPix = sort(reshape(win, [numel(win), 1]), 'descend');
+        % rowIndices = ceil(pixelList / rows);
+        % colIndices = pixelList - (rowIndices - 1) * rows;
+        [rowIndices, colIndices] = ind2sub([rows,cols],pixelList);
+        
+        % 根据方法选择不同的权重计算
+        if strcmp(method, 'centroid')
+            weight = srcImg(rowIndices, colIndices);
+        elseif strcmp(method, 'sqweighted')
+            weight = srcImg(rowIndices, colIndices).^2;
+        elseif strcmp(method, 'withthres')
+            weight = srcImg(rowIndices, colIndices) - bgdThres;
         end
-        starBrightnessList(starIdx) = mean(sortedPix(1:4)) - imgMean;
+        
+        % 计算并更新结果
+        cenRow = sum((rowIndices' * weight), "all") / sum(srcImg(rowIndices, colIndices), 'all');
+        cenCol = sum(weight * colIndices, "all") / sum(srcImg(rowIndices, colIndices), 'all');
+        starSize = numel(pixelList);
+        starBrightness = mean2(srcImg(rowIndices, colIndices)) - imgMean;
+        
+        ObservedStarList(starIdx,:) = [cenRow, cenCol, starSize, starBrightness];
     end
-
-    starList = struct('row', starCenRowList, 'col', starCenColList, 'size', starSizeList, 'bri', starBrightnessList);
 end
+
+
+
+% function ObservedStarList = CenterExtraction(srcImg, binaryImg, method, bgdThres, sizeThres)
+%     % method:
+%     % 'centroid'    质心法
+%     % 'sqweighted'  平方加权质心法
+%     % 'withthres'   带阈值的质心法，缺省时默认方法
+%     % 'fitting'     曲面拟合法，暂未实现
+
+%     % bgdThres:     当使用带阈值的质心法时，减去的背景值T，缺省时默认为输入图像的均值
+%     % sizeThres:    连通域的像素数量阈值, 尺寸小于此值的连通域将被剔除
+
+%     % ObservedStarList:
+%     %   row:    1*n matrix
+%     %   col:    1*n matrix
+%     %   size:   1*n matrix
+%     %   bri:    1*n matrix
+
+%     imgMean = mean2(srcImg);
+%     if nargin < 3 || isempty(method)
+%         method = 'withthres';
+%     end
+%     if strcmp(method, 'withthres') && (nargin < 4 || isempty(bgdThres))
+%         bgdThres = imgMean;
+%     end
+%     if nargin < 5 || isempty(sizeThres)
+%         sizeThres = 1;
+%     end
+
+%     % 寻找所有连通区域
+%     connRegionStrc = bwconncomp(binaryImg, 4);
+%     connRegionList = connRegionStrc.PixelIdxList;
+%     % 尺寸阈值
+%     if sizeThres > 1
+%         starNum = 0;
+%         for starIdx = 1:length(connRegionList)
+%             if length(connRegionList{starIdx}) >= sizeThres
+%                 starNum = starNum + 1;
+%                 connRegionList{starNum} = connRegionList{starIdx};
+%             end
+%         end
+%         connRegionList(starNum + 1:end) = [];
+%     end
+%     starNum = length(connRegionList);
+%     % 宽高
+%     imgSize = size(srcImg);
+%     rows = imgSize(1);
+%     cols = imgSize(2);
+%     % 计算每个连通区域的重心
+%     % s = regionprops(cc, 'Centroid');
+%     % centroids = cat(1, s.Centroid);
+%     starSizeList       = zeros(starNum, 1);
+%     starCenRowList     = zeros(starNum, 1);
+%     starCenColList     = zeros(starNum, 1);
+%     starBrightnessList = zeros(starNum, 1);
+%     if strcmp(method, 'centroid')
+%         for starIdx = 1:starNum
+%             % 对每一簇像素
+%             pixelList = connRegionList{starIdx};
+%             intensitySum = 0;
+%             cenRowSum = 0;
+%             cenColSum = 0;
+%             for pixelIdx = 1:length(pixelList)
+%                 col = uint32(ceil(pixelList(pixelIdx) / rows));
+%                 row = uint32(pixelList(pixelIdx) - (col - 1) * rows);
+%                 intensitySum = intensitySum + double(srcImg(row, col));
+%                 cenRowSum = cenRowSum + double(srcImg(row, col)) * double(row);
+%                 cenColSum = cenColSum + double(srcImg(row, col)) * double(col);
+%             end
+%             cenRow = cenRowSum / intensitySum;
+%             cenCol = cenColSum / intensitySum;
+%             starCenRowList(starIdx) = cenRow;
+%             starCenColList(starIdx) = cenCol;
+%         end
+%     elseif strcmp(method, 'sqweighted')
+%         for starIdx = 1:starNum
+%             % 对每一簇像素
+%             pixelList = connRegionList{starIdx};
+%             intensitySum = 0;
+%             cenRowSum = 0;
+%             cenColSum = 0;
+%             for pixelIdx = 1:length(pixelList)
+%                 col = uint32(ceil(pixelList(pixelIdx) / rows));
+%                 row = uint32(pixelList(pixelIdx) - (col - 1) * rows);
+%                 intensitySum = intensitySum + double(srcImg(row, col)) ^ 2;
+%                 cenRowSum = cenRowSum + double(srcImg(row, col)) ^ 2 * double(row);
+%                 cenColSum = cenColSum + double(srcImg(row, col)) ^ 2 * double(col);
+%             end
+%             cenRow = cenRowSum / intensitySum;
+%             cenCol = cenColSum / intensitySum;
+%             starCenRowList(starIdx) = cenRow;
+%             starCenColList(starIdx) = cenCol;
+%         end
+%     elseif strcmp(method, 'withthres')
+%         for starIdx = 1:starNum
+%             % 对每一簇像素
+%             pixelList = connRegionList{starIdx};
+%             intensitySum = 0;
+%             cenRowSum = 0;
+%             cenColSum = 0;
+%             for pixelIdx = 1:length(pixelList)
+%                 col = uint32(ceil(pixelList(pixelIdx) / rows));
+%                 row = uint32(pixelList(pixelIdx) - (col - 1) * rows);
+%                 intensitySum = intensitySum + (double(srcImg(row, col)) - bgdThres);
+%                 cenRowSum = cenRowSum + (double(srcImg(row, col)) - bgdThres) * double(row);
+%                 cenColSum = cenColSum + (double(srcImg(row, col)) - bgdThres) * double(col);
+%             end
+%             cenRow = cenRowSum / intensitySum;
+%             cenCol = cenColSum / intensitySum;
+%             starCenRowList(starIdx) = cenRow;
+%             starCenColList(starIdx) = cenCol;
+%         end
+%     elseif strcmp(method, 'fitting')
+
+%     else
+%         ['Error: There are not a method called "', method, '".']
+%     end
+
+%     % 计算每颗星的大小及亮度（最亮四个像素的均值）
+%     for starIdx = 1:starNum
+%         % 对每一簇像素
+%         pixelList = connRegionList{starIdx};
+%         starSize = length(pixelList);
+%         starSizeList(starIdx) = starSize;
+%         if starSize >= 4
+%             sortedPix = sort(srcImg(pixelList), 'descend');
+%         else
+%             col = uint32(round(starCenColList(starIdx)));
+%             row = uint32(round(starCenRowList(starIdx)));
+%             win = srcImg(max(1, row - 1):min(rows, row + 1), max(1, col - 1):min(cols, col + 1));
+%             sortedPix = sort(reshape(win, [numel(win), 1]), 'descend');
+%         end
+%         starBrightnessList(starIdx) = mean(sortedPix(1:4)) - imgMean;
+%     end
+
+%     % ObservedStarList = struct('row', starCenRowList, 'col', starCenColList, 'size', starSizeList, 'bri', starBrightnessList);
+%     ObservedStarList = [starCenRowList, starCenColList, starSizeList, starBrightnessList];
+% end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function markImg = MarkPosition(starImg,starList)
     markImg = starImg;

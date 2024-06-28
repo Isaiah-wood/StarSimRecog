@@ -32,9 +32,9 @@ function [cameraConf, noiseConf] = InitConf
     %       --mainpcol  像主点坐标col(像素).
     %       --channels  图像通道数(取1或3).
     cameraConf = struct( ...
-        'ra', 90, ...
-        'dec', 90, ...
-        'roa', 0, ...
+        'ra', 63.3148, ...
+        'dec', 129.9164, ...
+        'roa', 170.455, ...
         'height', 4096, ...
         'width', 4096, ...
         'pixelsize', 2.74, ...
@@ -45,9 +45,9 @@ function [cameraConf, noiseConf] = InitConf
         'constantc', 70000, ...
         'channels', 1 ...
     );
-    cameraConf.ra       = rand() * 360;
-    cameraConf.dec      = rand() * 180;
-    cameraConf.roa      = rand() * 360;
+    % cameraConf.ra       = rand() * 360;
+    % cameraConf.dec      = rand() * 180;
+    % cameraConf.roa      = rand() * 360;
     cameraConf.mainpcol = 0.5 * (cameraConf.height + 1);
     cameraConf.mainprow = 0.5 * (cameraConf.width + 1);
     cameraConf.f        = (cameraConf.height^2 + cameraConf.width^2)^0.5/2 * cameraConf.pixelsize / tand(cameraConf.fovradius);
@@ -113,7 +113,7 @@ function [imgStarConf, VisibleStarListSorted] = TakePhoto(cameraConf, VisibleSta
     starCoordPixel = Vec2Coo(cameraConf, sensorVisibleStarVecList)'; % 投影变换
 
     VisibleStarList(:, 6) = 1;
-    VisibleStarList(:, 7:8) = round(starCoordPixel(:,1:2));
+    VisibleStarList(:, 7:8) = starCoordPixel(:,1:2);
 
     % 剔除不在矩形图像范围内的星. Cull stars that are not within the bounds of the rectangular image.
     for starIdx = length(VisibleStarVecList):-1:1
@@ -340,12 +340,9 @@ function pixCoo = Vec2Coo(cameraConf, dirVec)
     % dirVec:       3*n matrix, direction vectors in sensor coordinate system.
     % pixCoo:       2*n matrix, point coordinate in display coordinate system. Count from 1, the origin is upper left corner, by sequence of [row; col].
 
-    intrinsicParamMat = [cameraConf.f, 0, cameraConf.width/2*cameraConf.pixelsize;...
-                        0, cameraConf.f, cameraConf.height/2*cameraConf.pixelsize;...
+    intrinsicParamMat = [cameraConf.f, 0, cameraConf.mainpcol*cameraConf.pixelsize;...
+                        0, cameraConf.f, cameraConf.mainprow*cameraConf.pixelsize;...
                         0, 0, 1];
-    % intrinsicParamMat = [cameraConf.f, 0, 0;...
-    %                      0, cameraConf.f, 0;...
-    %                      0, 0, 1];
     homoCoord = intrinsicParamMat * dirVec; % homogeneous coordinate
     pixCoo = homoCoord(1:2, :) ./ homoCoord(3, :) / cameraConf.pixelsize; % Point coordinate in image coordinate system. The origin is the main point. X axis is horizontal, Y axis is vertical.
 end
@@ -387,9 +384,6 @@ function dcm = Att2Dcm(att)
     % dcm:  3*3 matrix, direction cosine matrix from J2000 to sensor.
 
     att = -att;
-    % att(1) = -att(1);
-    % att(2) = -att(2);
-    % att(3) = -att(3);
 
 
     cosRa  = cos(att(1));
@@ -399,22 +393,15 @@ function dcm = Att2Dcm(att)
     cosRoa = cos(att(3));
     sinRoa = sin(att(3));
 
-    % dcm = [cosRa, sinRa, 0; -sinRa, cosRa, 0; 0, 0, 1] *...
-    %       [1, 0, 0; 0, cosDec, sinDec; 0, -sinDec, cosDec] *...
-    %       [cosRoa, sinRoa, 0; -sinRoa, cosRoa, 0; 0, 0, 1];
-
     dcm =   [cosRa, sinRa, 0; -sinRa, cosRa, 0; 0, 0, 1] *...
             [cosDec, 0, -sinDec; 0, 1, 0; sinDec, 0, cosDec] *...
             [cosRoa, sinRoa, 0; -sinRoa, cosRoa, 0; 0, 0, 1];
 
     dcm = dcm';
 
-    % dcm = [1, 0, 0; 0, cosRa, sinRa; 0, -sinRa, cosRa] * [cosDec, 0, sinDec; 0, 1, 0; -sinDec, 0, cosDec];
-
-    % dcm =   [1, 0, 0; 0, cosRa, sinRa; 0, -sinRa, cosRa] *...
-    %     [cosDec, 0, sinDec; 0, 1, 0; -sinDec, 0, cosDec] *...
-    %     [cosRoa, sinRoa, 0; -sinRoa, cosRoa, 0; 0, 0, 1];
-
+    % dcm = [cosRa, sinRa, 0; -sinRa, cosRa, 0; 0, 0, 1] *...
+    %       [1, 0, 0; 0, cosDec, sinDec; 0, -sinDec, cosDec] *...
+    %       [cosRoa, sinRoa, 0; -sinRoa, cosRoa, 0; 0, 0, 1];
 end
 
 
@@ -425,13 +412,15 @@ function att = Dcm2Att(dcm)
     % att:  1*3 matrix, [ra dec roa], radius.
 
     % Decompose DCM into rotations around each axis
-    % Ra = atan2(dcm(2,3), dcm(1,3));
+    % dcm = dcm';
+
+    % Ra = atan2(dcm(2,3), -dcm(1,3));
     % Dec = acos(dcm(3,3));
-    % Roa = atan2(-dcm(3,2), dcm(3,1));
+    % Roa = atan2(dcm(3,2), dcm(3,1));
 
     Ra = atan2(dcm(3,2), dcm(3,1));
     Dec = acos(dcm(3,3));
-    Roa = atan2(dcm(1,3), -dcm(2,3));
+    Roa = atan2(dcm(2,3), -dcm(1,3));
 
     if Ra < 0 
         Ra = 2*pi + Ra;

@@ -1,4 +1,4 @@
-mSimulation
+mSimulation;
 
 % 创建球体  
 [xSphere, ySphere, zSphere] = sphere(100); % 50 是网格的精细度  
@@ -16,7 +16,7 @@ R = 1;
 
 
 % 定义三维向量并归一化  
-v = VisibleStarVecList(1,:); % 示例三维向量  
+v = VisibleStarList(:,2:4); % 示例三维向量  
 v_normalized = v / norm(v);  
 v_scaled = R * v_normalized; % 缩放向量到球体半径  
   
@@ -25,7 +25,11 @@ hold on;
 plot3(v_scaled(1), v_scaled(2), v_scaled(3), 'ro', 'MarkerSize', 20, 'LineWidth', 2);  
 text(v_scaled(1), v_scaled(2), v_scaled(3), 'Vector Direction', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');  
   
-
+ra = cameraConf.ra;
+dec = cameraConf.dec;
+roa = cameraConf.roa;
+dcm = Fnsis.Att2Dcm(deg2rad([ra, dec, roa]));
+sensorVisibleStarVecList = dcm * v';
 
 % 定义三维向量并归一化  
 v = sensorVisibleStarVecList(:,1); % 示例三维向量  
